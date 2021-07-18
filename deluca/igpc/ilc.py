@@ -1,12 +1,15 @@
 import os
 import time
 import jax.numpy as jnp
-from rollout import rollout, compute_ders
-from lqr_solver import LQR
+from deluca.igpc.rollout import rollout, compute_ders
+from deluca.igpc.lqr_solver import LQR
 from PIL import Image
 import jax
 
-def iLC_open(env_true, env_sim, cost_func, U, T, rollin="non", backtracking=True, verbose=True, alpha=1.0):
+
+def iLC_open(
+    env_true, env_sim, cost_func, U, T, rollin="non", backtracking=True, verbose=True, alpha=1.0
+):
     r = 1
     X, U, c = rollout(env_true, cost_func, U)
     assert rollin in ["g", "lin", "non"]
@@ -29,9 +32,7 @@ def iLC_open(env_true, env_sim, cost_func, U, T, rollin="non", backtracking=True
                 if cC < c:
                     X, U, c, alpha = XC, UC, cC, alphaC
                     if verbose:
-                        print(
-                            f"iLC (open+{rollin}): t = {t}, r = {r}, c = {c}, alpha = {alpha}"
-                        )
+                        print(f"iLC (open+{rollin}): t = {t}, r = {r}, c = {c}, alpha = {alpha}")
                     break
         else:
             r += 1
@@ -48,12 +49,22 @@ def iLC_open(env_true, env_sim, cost_func, U, T, rollin="non", backtracking=True
     return X, U, None, None, c
 
 
-def iLC_closed(env_true, env_sim, cost_func, U, T, k=None, K=None, X=None, ref_alpha=1.0, verbose=True, backtracking=True):
+def iLC_closed(
+    env_true,
+    env_sim,
+    cost_func,
+    U,
+    T,
+    k=None,
+    K=None,
+    X=None,
+    ref_alpha=1.0,
+    verbose=True,
+    backtracking=True,
+):
     alpha, r = ref_alpha, 1
     X, U, c = rollout(env_true, cost_func, U, k, K, X)
-    print(
-        f"iLC: t = {-1}, r = {r}, c = {c}"
-    )
+    print(f"iLC: t = {-1}, r = {r}, c = {c}")
     for t in range(T):
         _, F, C = compute_ders(env_sim, cost_func, X, U)
         k, K = LQR(F, C)
@@ -64,7 +75,9 @@ def iLC_closed(env_true, env_sim, cost_func, U, T, k=None, K=None, X=None, ref_a
                 if cC <= c:
                     X, U, c, alpha = XC, UC, cC, alphaC
                     if verbose:
-                        print(f"iLC (closed+alpha={ref_alpha}): t = {t}, r = {r}, c = {c}, alpha = {alpha}")
+                        print(
+                            f"iLC (closed+alpha={ref_alpha}): t = {t}, r = {r}, c = {c}, alpha = {alpha}"
+                        )
                     break
         else:
             r += 1
@@ -73,3 +86,4 @@ def iLC_closed(env_true, env_sim, cost_func, U, T, k=None, K=None, X=None, ref_a
                 print(f"iLC (closed+alpha={ref_alpha}): t = {t}, r = {r}, c = {c}, alpha = {alpha}")
             break
     return X, U, k, K, c
+

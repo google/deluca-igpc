@@ -1,7 +1,5 @@
-import jax.numpy as jnp
 import jax.scipy.linalg as sla
 import numpy as np
-import sys
 
 
 def lambda_adjust(reg_lambda, multiplier, consts, increase):
@@ -11,13 +9,9 @@ def lambda_adjust(reg_lambda, multiplier, consts, increase):
         reg_lambda = max(reg_lambda * multiplier, lambda_min)
     else:
         multiplier = min(1 / factor, multiplier / factor)
-        reg_lambda = (
-            reg_lambda * multiplier if reg_lambda * multiplier >= lambda_min else 0
-        )
+        reg_lambda = reg_lambda * multiplier if reg_lambda * multiplier >= lambda_min else 0
     reg_lambda = max(reg_lambda, lambda_min)
-    print(
-        f"lambda change {increase} - new lambda {reg_lambda} - new multiplier {multiplier}"
-    )
+    print(f"lambda change {increase} - new lambda {reg_lambda} - new multiplier {multiplier}")
     if reg_lambda > 1e10:
         reg_lambda = 1e10
     return reg_lambda, multiplier
@@ -47,9 +41,7 @@ def LQR(F, C):
     return k, K
 
 
-def LQG(
-    F, C, reg_lambda=0.0, multiplier=1.0, damping_consts=[None, None], reg_type="V"
-):
+def LQG(F, C, reg_lambda=0.0, multiplier=1.0, damping_consts=[None, None], reg_type="V"):
     ### Main changes
     ### C must have c_ux also. Otherwise error.
     ### lambda is being updated in case pass fails due to PD. The next lambda and multiplier are returned
@@ -110,9 +102,7 @@ def LQG(
         else:
             #### lambda will be increased now
             print("Increasing lambda")
-            reg_lambda, multiplier = lambda_adjust(
-                reg_lambda, multiplier, damping_consts, True
-            )
+            reg_lambda, multiplier = lambda_adjust(reg_lambda, multiplier, damping_consts, True)
     return k, K, [reg_lambda, multiplier, gains_lin, gains_quad]
 
 
