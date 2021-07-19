@@ -1,4 +1,6 @@
+import jax
 import jax.scipy.linalg as sla
+import jax.numpy as jnp
 import numpy as np
 
 
@@ -23,7 +25,32 @@ def LQR(F, C):
         [None for _ in range(H)],
         [None for _ in range(H)],
     )
+
     V_x, V_xx = np.zeros(d), np.zeros((d, d))
+    # V_x, V_xx = jnp.zeros(d), jnp.zeros((d, d))
+
+    # F_x, F_u = F
+    # C_x, C_u, C_xx, C_uu = C
+
+    # def loop(carry, args):
+        # v_x, v_xx = carry
+        # f_x, f_u, c_x, c_u, c_xx, c_uu = args
+
+        # q_x, q_u = c_x + f_x.T @ v_x, c_u + f_u.T @ v_x
+        # q_xx, q_ux, q_uu = (
+            # c_xx + f_x.T @ v_xx @ f_x,
+            # f_u.T @ v_xx @ f_x,
+            # c_uu + f_u.T @ v_xx @ f_u,
+        # )
+
+        # K, k = -jnp.linalg.inv(q_uu) @ q_ux, -jnp.linalg.inv(q_uu) @ q_u
+        # v_x = q_x - K.T @ q_uu @ k
+        # v_xx = q_xx - K.T @ q_uu @ K
+        # v_xx = (v_xx + v_xx.T) / 2
+
+        # return (v_x, v_xx), (K, k)
+
+    # _, (K, k) = jax.lax.scan(loop, (V_x, V_xx), (F_x, F_u, C_x, C_u, C_xx, C_uu))
     for h in range(H - 1, -1, -1):
         f_x, f_u = F[h]
         c_x, c_u, c_xx, c_uu = C[h]

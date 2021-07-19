@@ -1,6 +1,7 @@
 import os
 import time
 import jax
+import jax.numpy as jnp
 from PIL import Image
 
 
@@ -65,38 +66,30 @@ def rollout(
     return X, U, cost
 
 
-def hessian(f, arg):
-    return jax.jacfwd(jax.jacrev(f, argnums=arg), argnums=arg)
+def hessian(f, argnums=0):
+    return jax.jacfwd(jax.jacrev(f, argnums=argnums), argnums=argnums)
 
 
 def compute_ders(env, cost, X, U, H=None):
-    # if H == None:
-    #     H = env.H
-    H = env.H
-    D, F, C = (
-        [None for _ in range(H)],
-        [None for _ in range(H)],
-        [None for _ in range(H)],
-    )
+    def func(x0, x1, u):
+        x0 = env.init().unflatten(x0)
+        new_state, _ = env(x0, u)
+        d = x1 - new_state.flatten()
+        g, _ = jax.jacfwd(env, argnums=(0, 1))(x0, u)
+        f = (g.arr[0].arr, g.arr[1])
+        c_der = jax.grad(cost, argnums=(0, 1))(x0, u, env)
+        c_der_der = hessian(cost, (0, 1))(x0, u, env)
+        c = (c_der[0].arr, c_der[1], c_der_der[0].arr[0].arr, c_der_der[1][1])
 
-    # s = time.time()
-    for h in range(H):
-        new_state, _ = env(X[h], U[h])
-        D[h] = X[h + 1].flatten() - new_state.flatten()
-        # ss = time.time()
-        # print('aaaa', ss-s)
-        # s = time.time()
-        g, _ = jax.jacfwd(env, argnums=(0, 1))(X[h], U[h])
-        # ss = time.time()
-        # print('aa', ss-s)
-        F[h] = jax.tree_util.tree_flatten(g)[0]
-        # tt = time.time()
-        # print('a', tt-ss)
-        c_der = jax.tree_util.tree_flatten(jax.grad(cost, argnums=(0, 1))(X[h], U[h], env))[0]
-        # s = time.time()
-        # print('b', s-tt)
-        c_der_der = jax.tree_util.tree_flatten(hessian(cost, (0, 1))(X[h], U[h], env))[0]
-        C[h] = (c_der[0], c_der[1], c_der_der[0], c_der_der[3])
-    # tt = time.time()
-    # print("c", tt - s)
+        return d, f, c
+
+    X = [x.flatten() for x in X]
+    X0 = jnp.array(X[:-1])
+    X1 = jnp.array(X[1:])
+    U = jnp.array(U)
+
+    D, F, C = jax.vmap(func)(X0, X1, U)
+
+    F = list(zip(*F))
+    C = list(zip(*C))
     return D, F, C
