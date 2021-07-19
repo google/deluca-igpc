@@ -126,16 +126,14 @@ def iGPC_closed(
         k, K = LQR(F, C)
         if backtracking:
             if prev_loop_fail:
-                print("dropping LR and alpha")
-                lr, alpha = lr / 100, alpha
+                if verbose:
+                    print("Backtrack Failed: Annealing IGPC Learning Rate")
+                    lr = lr / 100
 
             prev_loop_fail = True
             for alphaC in alpha * 1.1 * 1.1 ** (-jnp.arange(6) ** 2):
-                print("Trying alpha ", alphaC)
+                #print("Trying alpha ", alphaC)
                 r += 1
-                # if c < 500:
-                #     print('cutting lr')
-                #     lr = 0.0
                 XC, UC, cC = GPC_rollout(
                     env_true, env_sim, cost_func, U, k, K, X, D, F, alphaC, w_is, lr
                 )
