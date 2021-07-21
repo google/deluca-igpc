@@ -2,9 +2,11 @@ import os
 import time
 import jax
 import jax.numpy as jnp
+from functools import partial
 from PIL import Image
 
 
+@partial(jax.jit, static_argnums=(1,))
 def rollout(
     env,
     cost_func,
@@ -17,8 +19,6 @@ def rollout(
     F=None,
     H=None,
     start_state=None,
-    render=False,
-    render_dir=".",
 ):
     """
     Arg List
@@ -31,14 +31,9 @@ def rollout(
     D: Optional noise vectors for the rollout (GPC)
     F: Linearization shift ??? (GPC)
     H: The horizon length to perform a rollout.
-    render: Whether to render the rollout or not
-    render_dir: Which directory to render the rollout.
     """
-    if render and not os.path.exists(render_dir):
-        os.makedirs(render_dir)
-    if H == None:
-        H = env.H
-    X, U = [None for _ in range(H + 1)], [None for _ in range(H)]
+    H = env.H
+    X, U = [None] * (H + 1), [None] * (H)
     if start_state is None:
         start_state = env.init()
     X[0], cost = start_state, 0.0
@@ -59,10 +54,6 @@ def rollout(
             X[h + 1] = X_old[h + 1] + F[h][0] @ (X[h] - X_old[h]) + F[h][1] @ (U[h] - U_old[h])
         cost += cost_func(X[h], U[h], env)
 
-        if render:
-            img = env.render(mode="rgb_array")
-            img = Image.fromarray(img)
-            img.save("{}/{}.png".format(render_dir, h), "PNG")
     return X, U, cost
 
 
@@ -70,7 +61,8 @@ def hessian(f, argnums=0):
     return jax.jacfwd(jax.jacrev(f, argnums=argnums), argnums=argnums)
 
 
-def compute_ders(env, cost, X, U, H=None):
+@partial(jax.jit, static_argnums=(1,))
+def compute_ders_inner(env, cost, X, U, H=None):
     def func(x0, x1, u):
         x0 = env.init().unflatten(x0)
         new_state, _ = env(x0, u)
@@ -90,6 +82,12 @@ def compute_ders(env, cost, X, U, H=None):
 
     D, F, C = jax.vmap(func)(X0, X1, U)
 
+    return D, F, C
+
+
+def compute_ders(env, cost, X, U, H=None):
+    D, F, C = compute_ders_inner(env, cost, X, U, H=None)
     F = list(zip(*F))
     C = list(zip(*C))
+
     return D, F, C

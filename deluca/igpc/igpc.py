@@ -5,36 +5,26 @@ from deluca.igpc.lqr_solver import LQR
 import jax
 
 
-def counterfact_loss(
-    E, off, W, H, M, x, t, env_sim, cost_func, U_old, k, K, X_old, D, F, w_is, alpha, C
-):
+def counterfact_loss(E, off, W, H, M, x, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, C):
     y, cost = x, 0
     for h in range(H):
-        u_delta = jnp.tensordot(E, W[h : h + M], axes=([0, 2], [0, 1])) + off
-        u = (
-            U_old[t + h]
-            + alpha * k[t + h]
-            + K[t + h] @ (y.flatten() - X_old[t + h].flatten())
-            + C * u_delta
+        u_delta = (
+            jnp.tensordot(
+                E,
+                jax.lax.dynamic_slice(W, (h, 0), (M, W.shape[1])),
+                axes=([0, 2], [0, 1]),
+            )
+            + off
         )
+        u = U_old[h] + alpha * k[h] + K[h] @ (y.flatten() - X_old[h].flatten()) + C * u_delta
         cost = cost_func(y, u, env_sim)
 
         new_state, _ = env_sim(y, u)
-        if w_is == "de":
-            y = y.unflatten(new_state.flatten() + W[h + M])
-        elif w_is == "dede":
-            y = y.unflatten(new_state.flatten() + D[h + M] + W[h + M])
-        else:
-            y = y.unflatten(
-                X_old[h + M + 1].flatten()
-                + F[h + M][0] @ (y.flatten() - X_old[h + M].flatten())
-                + F[h + M][1] @ (u - U_old[h + M])
-                + W[h + M]
-            )
+        y = y.unflatten(new_state.flatten() + W[h + M])
     return cost
 
 
-grad_loss = jax.grad(counterfact_loss, (0, 1))
+grad_loss = jax.jit(jax.grad(counterfact_loss, (0, 1)), static_argnums=(3, 4, 7))
 
 
 def GPC_rollout(env_true, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, w_is, ref_lr=0.1):
@@ -82,16 +72,14 @@ def GPC_rollout(env_true, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, w
                 H,
                 M,
                 X[h - H],
-                h - H,
                 env_sim,
                 cost_func,
-                U_old,
-                k,
-                K,
-                X_old,
+                U_old[h - H :],
+                k[h - H :],
+                K[h - H :],
+                X_old[h - H :],
                 D,
                 F,
-                w_is,
                 alpha,
                 C,
             )
@@ -122,6 +110,7 @@ def iGPC_closed(
     assert w_is in ["de", "dede", "delin"]
     prev_loop_fail = False
     for t in range(T):
+        s = time.time()
         D, F, C = compute_ders(env_sim, cost_func, X, U)
         k, K = LQR(F, C)
         if backtracking:
@@ -132,11 +121,9 @@ def iGPC_closed(
 
             prev_loop_fail = True
             for alphaC in alpha * 1.1 * 1.1 ** (-jnp.arange(6) ** 2):
-                #print("Trying alpha ", alphaC)
+                # print("Trying alpha ", alphaC)
                 r += 1
-                XC, UC, cC = GPC_rollout(
-                    env_true, env_sim, cost_func, U, k, K, X, D, F, alphaC, w_is, lr
-                )
+                XC, UC, cC = GPC_rollout(env_true, env_sim, cost_func, U, k, K, X, D, F, alphaC, lr)
                 if cC < c:
                     X, U, c, alpha = XC, UC, cC, alphaC
                     if verbose:
@@ -148,5 +135,5 @@ def iGPC_closed(
             X, U, c = GPC_rollout(env_true, env_sim, cost_func, U, k, K, X, D, F, alpha, w_is, lr)
             if verbose:
                 print(f"iGPC: t = {t}, r = {r}, c = {c}")
+        print(time.time() - s)
     return X, U, k, K, c
-

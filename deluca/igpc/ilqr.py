@@ -40,13 +40,15 @@ def iLQR(
         X,
         start_state=start_state,
         H=H,
-        render=render,
-        render_dir=os.path.join(render_dir, "t=0_r=1"),
+    )
+    K, k = (
+        [None for _ in range(H)],
+        [None for _ in range(H)],
     )
     if verbose:
         print(f"iLQR ({info}): t = -1, r = 1, c = {c}")
     for t in range(T):
-        # s = time.time()
+        s = time.time()
         _, F, C = compute_ders(env, cost, X, U)
         # t = time.time()
         # print('der time ', t-s)
@@ -54,7 +56,6 @@ def iLQR(
         if backtracking:
             for alphaC in alpha * 1.1 * 1.1 ** (-jnp.arange(10) ** 2):
                 r += 1
-                # s = time.time()
                 XC, UC, cC = rollout(
                     env,
                     cost,
@@ -65,8 +66,6 @@ def iLQR(
                     alpha,
                     start_state=start_state,
                     H=H,
-                    render=render,
-                    render_dir=os.path.join(render_dir, f"t={t}_r={r}"),
                 )
                 if verbose:
                     print(f"iLQR ({info}): t = {t}, r = {r}, alphac = {alphaC}, cost = {cC}")
@@ -87,12 +86,11 @@ def iLQR(
                 alpha,
                 start_state=start_state,
                 H=H,
-                render=render,
-                render_dir=os.path.join(render_dir, f"t={t}_r={r}"),
             )
             if verbose:
                 print(f"iLQR ({info}): t = {t}, r = {r}, cost = {c}")
 
+        print(time.time() - s)
     return X, U, k, K, c
 
 
