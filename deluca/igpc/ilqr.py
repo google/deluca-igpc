@@ -22,8 +22,6 @@ def iLQR(
     info="true",
     start_state=None,
     H=None,
-    render=False,
-    render_dir=".",
     verbose=True,
     alpha=0.5,
     backtracking=True,
@@ -39,9 +37,7 @@ def iLQR(
         K,
         X,
         start_state=start_state,
-        H=H,
-        render=render,
-        render_dir=os.path.join(render_dir, "t=0_r=1"),
+        H=H
     )
     if verbose:
         print(f"iLQR ({info}): t = -1, r = 1, c = {c}")
@@ -65,8 +61,6 @@ def iLQR(
                     alpha,
                     start_state=start_state,
                     H=H,
-                    render=render,
-                    render_dir=os.path.join(render_dir, f"t={t}_r={r}"),
                 )
                 if verbose:
                     print(f"iLQR ({info}): t = {t}, r = {r}, alphac = {alphaC}, cost = {cC}")
@@ -87,12 +81,9 @@ def iLQR(
                 alpha,
                 start_state=start_state,
                 H=H,
-                render=render,
-                render_dir=os.path.join(render_dir, f"t={t}_r={r}"),
             )
             if verbose:
                 print(f"iLQR ({info}): t = {t}, r = {r}, cost = {c}")
-
     return X, U, k, K, c
 
 

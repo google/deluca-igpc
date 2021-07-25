@@ -6,35 +6,34 @@ import jax
 
 
 def counterfact_loss(
-    E, off, W, H, M, x, t, env_sim, cost_func, U_old, k, K, X_old, D, F, w_is, alpha, C
+    E, off, W, H, M, x, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, C
 ):
     y, cost = x, 0
     for h in range(H):
-        u_delta = jnp.tensordot(E, W[h : h + M], axes=([0, 2], [0, 1])) + off
-        u = (
-            U_old[t + h]
-            + alpha * k[t + h]
-            + K[t + h] @ (y.flatten() - X_old[t + h].flatten())
-            + C * u_delta
-        )
+        u_delta = jnp.tensordot(E, jax.lax.dynamic_slice(W, (h, 0), (M, W.shape[1])), 
+        	axes=([0, 2], [0, 1])) + off
+        u = (U_old[h] + alpha * k[h] + K[h] @ (y.flatten() - X_old[h].flatten()) 
+        	+ C * u_delta)
         cost = cost_func(y, u, env_sim)
 
         new_state, _ = env_sim(y, u)
-        if w_is == "de":
-            y = y.unflatten(new_state.flatten() + W[h + M])
-        elif w_is == "dede":
-            y = y.unflatten(new_state.flatten() + D[h + M] + W[h + M])
-        else:
-            y = y.unflatten(
-                X_old[h + M + 1].flatten()
-                + F[h + M][0] @ (y.flatten() - X_old[h + M].flatten())
-                + F[h + M][1] @ (u - U_old[h + M])
-                + W[h + M]
-            )
+        y = y.unflatten(new_state.flatten() + W[h + M])
+        ## Removing the bottom functionality for performance
+        # if w_is == "de":
+        #     y = y.unflatten(new_state.flatten() + W[h + M])
+        # elif w_is == "dede":
+        #     y = y.unflatten(new_state.flatten() + D[h + M] + W[h + M])
+        # else:
+        #     y = y.unflatten(
+        #         X_old[h + M + 1].flatten()
+        #         + F[h + M][0] @ (y.flatten() - X_old[h + M].flatten())
+        #         + F[h + M][1] @ (u - U_old[h + M])
+        #         + W[h + M]
+        #     )
     return cost
 
 
-grad_loss = jax.grad(counterfact_loss, (0, 1))
+grad_loss = jax.jit(jax.grad(counterfact_loss, (0, 1)), static_argnums=(3, 4, 7))
 
 
 def GPC_rollout(env_true, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, w_is, ref_lr=0.1):
@@ -75,29 +74,10 @@ def GPC_rollout(env_true, env_sim, cost_func, U_old, k, K, X_old, D, F, alpha, w
         W = jax.ops.index_update(W, 0, w)
         W = jnp.roll(W, -1, axis=0)
         if h >= H:
-            delta_E, delta_off = grad_loss(
-                E,
-                off,
-                W,
-                H,
-                M,
-                X[h - H],
-                h - H,
-                env_sim,
-                cost_func,
-                U_old,
-                k,
-                K,
-                X_old,
-                D,
-                F,
-                w_is,
-                alpha,
-                C,
-            )
+            delta_E, delta_off = grad_loss(E, off, W, H, M, X[h - H], env_sim, cost_func, 
+            	U_old[h-H:], k[h-H:], K[h-H:], X_old[h-H:], D, F, alpha, C)
             E -= lr / h * delta_E
             off -= lr / h * delta_off
-    # print(norm_U_old, norm_other, norm_off, norm_U_delta, norm_U_vals)
     return X, U, cost
 
 
@@ -132,11 +112,9 @@ def iGPC_closed(
 
             prev_loop_fail = True
             for alphaC in alpha * 1.1 * 1.1 ** (-jnp.arange(6) ** 2):
-                #print("Trying alpha ", alphaC)
                 r += 1
-                XC, UC, cC = GPC_rollout(
-                    env_true, env_sim, cost_func, U, k, K, X, D, F, alphaC, w_is, lr
-                )
+                XC, UC, cC = GPC_rollout(env_true, env_sim, cost_func, U, k, K, 
+                	X, D, F, alphaC, w_is, lr)
                 if cC < c:
                     X, U, c, alpha = XC, UC, cC, alphaC
                     if verbose:
