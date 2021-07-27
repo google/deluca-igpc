@@ -19,7 +19,7 @@ def rollout(
 ):
     """
     Arg List
-    env: The environment to do the rollout on. This is treated as a derstructible copy.
+    env: The environment to do the rollout on.
     U_old: A base open loop control sequence
     k: open loop gain (iLQR)
     K: closed loop gain (iLQR)

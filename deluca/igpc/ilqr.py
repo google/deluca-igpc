@@ -29,39 +29,24 @@ def iLQR(
     r = 1
     if H == None:
         H = env.H
-    X, U, c = rollout(
-        env,
-        cost,
-        U,
-        k,
-        K,
-        X,
-        start_state=start_state,
-        H=H
-    )
+    X, U, c = rollout(env, cost, U, k, K, X, 
+        start_state=start_state, H=H)
     if verbose:
         print(f"iLQR ({info}): t = -1, r = 1, c = {c}")
     for t in range(T):
-        # s = time.time()
+        s = time.time()
         _, F, C = compute_ders(env, cost, X, U)
-        # t = time.time()
-        # print('der time ', t-s)
+        t = time.time()
+        print('der time ', t-s)
         k, K = LQR(F, C)
+        
         if backtracking:
             for alphaC in alpha * 1.1 * 1.1 ** (-jnp.arange(10) ** 2):
                 r += 1
-                # s = time.time()
-                XC, UC, cC = rollout(
-                    env,
-                    cost,
-                    U,
-                    k,
-                    K,
-                    X,
-                    alpha,
-                    start_state=start_state,
-                    H=H,
-                )
+                s = time.time()
+                XC, UC, cC = rollout(env, cost, U, k, K, X, alpha, 
+                    start_state=start_state, H=H,)
+                print('rollout time', time.time()-s)
                 if verbose:
                     print(f"iLQR ({info}): t = {t}, r = {r}, alphac = {alphaC}, cost = {cC}")
                 if cC <= c:
@@ -71,19 +56,11 @@ def iLQR(
                     break
         else:
             r += 1
-            X, U, c = rollout(
-                env,
-                cost,
-                U,
-                k,
-                K,
-                X,
-                alpha,
-                start_state=start_state,
-                H=H,
-            )
+            X, U, c = rollout(env, cost, U, k, K, X, alpha, 
+                start_state=start_state, H=H,)
             if verbose:
                 print(f"iLQR ({info}): t = {t}, r = {r}, cost = {c}")
+        
     return X, U, k, K, c
 
 
